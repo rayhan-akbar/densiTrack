@@ -12,7 +12,7 @@
 
 
 // Untuk menyimpan pictureNumber
-#define EEPROM_SIZE 1
+//#define EEPROM_SIZE 1
 
 // Pin Untuk CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM 32
@@ -33,10 +33,10 @@
 #define PCLK_GPIO_NUM 22
 #define BUTTON_GPIO_NUM 13 // GPIO for the button
 
-const char *SSID = "Infinix Note 40";
-const char *PASSWORD = "";
+const char *SSID = "DTE Staff";
+const char *PASSWORD = "ijecbe@DTE2023";
 const char *MQTT_BROKER = "ab25c1e854d343e386319e43604e5926.s1.eu.hivemq.cloud";
-const char *MQTT_TOPIC = "testTopic";
+const char *MQTT_TOPIC = "Camera";
 const char *MQTT_CLIENT_ID = "ESPCAM";
 const char *MQTT_USER = "despro-IOT";
 const char *MQTT_PASSWORD = "P@ssw0rd";
@@ -80,16 +80,15 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-int pictureNumber = 0;
+//int pictureNumber = 0;
+camera_fb_t * fb = NULL;
 
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
   Serial.begin(115200);
   setup_wifi();
- 
   Serial.setDebugOutput(true);
-
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -111,9 +110,10 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_UXGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
+  config.frame_size = FRAMESIZE_SVGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
   config.jpeg_quality = 10;
   config.fb_count = 2;
+  config.grab_mode = CAMERA_GRAB_LATEST;
   pinMode(4, INPUT);
   digitalWrite(4, LOW);
   rtc_gpio_hold_dis(GPIO_NUM_4);
@@ -126,20 +126,16 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
-
-  sensor_t *s = esp_camera_sensor_get();
-  s->set_brightness(s, 2);                 // -2 to 2
-  s->set_contrast(s, -2);                   // -2 to 2
-  s->set_saturation(s, 0);                 // -2 to 2
-
-  pinMode(4, OUTPUT);
-  Serial.println("System initialized.");
-  delay(1000);
+  setup_camera();
 }
 
 void loop() {
+  setup_camera();
+  Serial.println("entering loop");
+  Serial.println("Taking picture...");
   takePicture();
-
+  Serial.println("Sleep for 5 seconds");
+  delay(5000);
 }
 
 //Connect ke MQTT
@@ -164,10 +160,9 @@ void reconnect() {
 
 // Fungsi untuk mengambil Gambar
 void takePicture() {
-  camera_fb_t * fb = NULL;
   // Take Picture with Camera
-  digitalWrite(4, HIGH);
-  fb = esp_camera_fb_get();  
+  //digitalWrite(4, HIGH);
+  //fb = esp_camera_fb_get();  
   delay(2000);//This is key to avoid an issue with the image being very dark and green. If needed adjust total delay time.
   fb = esp_camera_fb_get();
   
@@ -178,27 +173,27 @@ void takePicture() {
   digitalWrite(4, LOW);
 
   // initialize EEPROM with predefined size
-  EEPROM.begin(EEPROM_SIZE);
-  pictureNumber = EEPROM.read(0) + 1;
+  //EEPROM.begin(EEPROM_SIZE);
+  //pictureNumber = EEPROM.read(0) + 1;
   // konversi image to Base64
   // String output;
   String base64Image = base64::encode(fb->buf, fb->len);
   //base64::encode(fb->buf, fb->len, const_cast<char*>(output.c_str()));
-  // Serial.println("Debug");
+  Serial.println(base64Image);
   //String base64Image = String(output);
   // Serial.println("Debug");
 
 
   // Koneksi ke MQTT
   reconnect();
-  Serial.println("Debug");
+  //Serial.println("Debug");
   Serial.println("Send to MQTT ");
   // Mengirimkan Gambar ke MQTT
-  client.publish(MQTT_TOPIC, base64Image.c_str());
-  //publishFunction(base64Image);
+  //client.publish(MQTT_TOPIC, base64Image.c_str());
+  publishFunction(base64Image);
   
-  EEPROM.write(0, pictureNumber);
-  EEPROM.commit();
+  //EEPROM.write(0, pictureNumber);
+  //EEPROM.commit();
 
   esp_camera_fb_return(fb);
 
@@ -206,28 +201,27 @@ void takePicture() {
   delay(500);
 
   // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
-  rtc_gpio_hold_en(GPIO_NUM_4);
 
   // ESP akan dapat dibangunkan pada saat pin 13 (PIR Sensor) mendeteksi
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_13, 0);
+  //esp_sleep_enable_ext0_wakeup(GPIO_NUM_13, 0);
 
   delay(500);
   Serial.println("Going to Sleep");
   // SLeep
-  esp_deep_sleep_start();
-  Serial.println("This will never be printed");
+  //esp_deep_sleep_start();
+  //Serial.println("This will never be printed");
 }
 
 // Fungsi untuk mengirimkan ke MQTT
 void publishFunction(String payload) {
   if (client.connected()) {
     Serial.print("Publishing payload...");
-
+    client.publish(MQTT_TOPIC, payload.c_str());
     // Membagi payload ke menjadi beberapa segment
-    const int chunkSize = 59 * 1024;
+    const int chunkSize = 60 * 1024;
     int totalChunks = payload.length() / chunkSize;
-
-    for (int i = 0; i <= totalChunks; i++) {
+    Serial.println(payload.length());
+    for (int i = 0; i <= 0; i++) {
       int startIndex = i * chunkSize;
       int endIndex = startIndex + chunkSize;
       if (endIndex > payload.length()) {
@@ -236,8 +230,7 @@ void publishFunction(String payload) {
 
       String chunk = payload.substring(startIndex, endIndex);
       // Serial.println("Pesan: " + chunk);
-
-      // Dikirimkan dalam bentuk JSON
+      //Dikirimkan dalam bentuk JSON
       // DynamicJsonDocument jsonDoc(60 * 1024);
       // jsonDoc["type"] = "capture";
       // jsonDoc["deviceId"] = MQTT_CLIENT_ID;
@@ -245,10 +238,8 @@ void publishFunction(String payload) {
       // jsonDoc["sck"] = i+1;
       // jsonDoc["tsck"] = totalChunks+1;
       // jsonDoc["payload"] = chunk;
-      
       // String jsonString;
       // serializeJson(jsonDoc, jsonString);
-
       client.publish(MQTT_TOPIC, chunk.c_str());
 
       delay(200);
@@ -277,4 +268,35 @@ void setup_wifi() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+}
+
+void setup_camera() {
+  
+
+  sensor_t *s = esp_camera_sensor_get();
+  s->set_brightness(s, 0);     // -2 to 2
+  s->set_contrast(s, 0);       // -2 to 2
+  s->set_saturation(s, 0);     // -2 to 2
+  s->set_special_effect(s, 0); // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
+  s->set_whitebal(s, 1);       // 0 = disable , 1 = enable
+  s->set_awb_gain(s, 1);       // 0 = disable , 1 = enable
+  s->set_wb_mode(s, 1);        // 0 to 4 - if awb_gain enabled (0 - Auto, 1 - Sunny, 2 - Cloudy, 3 - Office, 4 - Home)
+  s->set_exposure_ctrl(s, 1);  // 0 = disable , 1 = enable
+  s->set_aec2(s, 1);           // 0 = disable , 1 = enable
+  s->set_ae_level(s, 0);       // -2 to 2
+  s->set_aec_value(s, 300);    // 0 to 1200
+  s->set_gain_ctrl(s, 0);      // 0 = disable , 1 = enable
+  s->set_agc_gain(s, 0);       // 0 to 30
+  s->set_gainceiling(s, (gainceiling_t)0);  // 0 to 6
+  s->set_bpc(s, 0);            // 0 = disable , 1 = enable
+  s->set_wpc(s, 1);            // 0 = disable , 1 = enable
+  s->set_raw_gma(s, 1);        // 0 = disable , 1 = enable
+  s->set_lenc(s, 1);           // 0 = disable , 1 = enable
+  s->set_hmirror(s, 0);        // 0 = disable , 1 = enable
+  s->set_vflip(s, 0);          // 0 = disable , 1 = enable
+  s->set_dcw(s, 1);            // 0 = disable , 1 = enable
+  s->set_colorbar(s, 0);       // 0 = disable , 1 = enable
+  pinMode(4, OUTPUT);
+  Serial.println("System initialized.");
+  delay(1000);
 }
