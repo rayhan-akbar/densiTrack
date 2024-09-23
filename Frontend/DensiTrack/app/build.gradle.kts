@@ -62,6 +62,7 @@ dependencies {
 
     // OkHttp Dependency (Correct Kotlin DSL syntax)
     implementation("com.squareup.okhttp3:okhttp:4.9.3")
+    implementation ("com.google.accompanist:accompanist-swiperefresh:0.28.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

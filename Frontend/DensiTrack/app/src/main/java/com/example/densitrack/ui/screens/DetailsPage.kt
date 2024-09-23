@@ -49,6 +49,10 @@ import okhttp3.Call
 import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.SwipeRefreshState
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+
 
 
 @Composable
@@ -61,7 +65,8 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
     val eta = "ETA: Unknown"  // Hardcoded ETA
 
     // State for bus capacity (will be fetched from the backend)
-    var busCapacity by remember { mutableStateOf("Fetching...") }
+    var busCapacity by remember { mutableStateOf("...") }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     // Trigger API call to get bus capacity
     LaunchedEffect(Unit) {
@@ -70,6 +75,9 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
         }
     }
 
+    // Swipe refresh state
+    val swipeRefreshState = rememberSwipeRefreshState(isRefreshing)
+
     Box(
         contentAlignment = Alignment.TopCenter,
         modifier = Modifier
@@ -77,85 +85,97 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
             .background(Color(0xFF05445E))
             .padding(top = 88.dp)
     ) {
-        Column(
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.verticalScroll(rememberScrollState())
+        SwipeRefresh(
+            state = swipeRefreshState,
+            onRefresh = {
+                isRefreshing = true
+                // Trigger a new API call to refresh the data
+                fetchBusCapacity { capacity ->
+                    busCapacity = capacity
+                    isRefreshing = false
+                }
+            }
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_densitracklogo),
-                contentDescription = "White Logo",
-                modifier = Modifier.scale(0.9f)
-            )
-            Spacer(modifier = Modifier.padding(8.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+            Column(
+                verticalArrangement = Arrangement.Top,
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(text = "Bus Heading to")
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF000000)),
-                            modifier = Modifier.width(180.dp)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_densitracklogo),
+                    contentDescription = "White Logo",
+                    modifier = Modifier.scale(0.9f)
+                )
+                Spacer(modifier = Modifier.padding(8.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxWidth()
+                            Text(text = "Bus Heading to")
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF000000)),
+                                modifier = Modifier.width(160.dp)
                             ) {
-                                Text(
-                                    text = truncatedBusStop,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(vertical = 4.dp).padding(horizontal = 8.dp)
-                                )
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = truncatedBusStop,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(vertical = 4.dp).padding(horizontal = 8.dp)
+                                    )
+                                }
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(text = "Direction")
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = directionColor),
-                            modifier = Modifier.width(180.dp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxWidth()
+                            Text(text = "Direction")
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = directionColor),
+                                modifier = Modifier.width(160.dp)
                             ) {
-                                Text(
-                                    text = direction,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(vertical = 4.dp).padding(horizontal = 8.dp)
-                                )
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = direction,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(vertical = 4.dp).padding(horizontal = 8.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            // Display single bus info
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .wrapContentHeight()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    BusInfoRow(busNumber = busNumber, eta = eta, capacity = busCapacity)
+                // Display single bus info
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .wrapContentHeight()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        BusInfoRow(busNumber = busNumber, eta = eta, capacity = busCapacity)
+                    }
                 }
             }
         }
@@ -228,7 +248,7 @@ fun truncateDetailsText(text: String, maxLength: Int): String {
 fun fetchBusCapacity(onResult: (String) -> Unit) {
     val client = OkHttpClient()
     val request = Request.Builder()
-        .url("http://10.0.2.2:3000/tr/getobject")  // Use 10.0.2.2 for emulator
+        .url("http://192.168.80.238:3000/tr/getobject")  // Use 10.0.2.2 for emulator
         .build()
 
     // Make the network call asynchronously
@@ -274,5 +294,5 @@ fun fetchBusCapacity(onResult: (String) -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun DetailsPagePreview() {
-    DetailsPage(navController = rememberNavController(), busStop = "Bus Stop", direction = "biru")
+    DetailsPage(navController = rememberNavController(), busStop = "Bus Stop", direction = "Biru")
 }
