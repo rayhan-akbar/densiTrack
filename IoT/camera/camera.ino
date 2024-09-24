@@ -32,12 +32,12 @@
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 #define BUTTON_GPIO_NUM 13 // GPIO for the button
-
+#define BUFFER_SIZE 15
 const char *SSID = "DTE Staff";
 const char *PASSWORD = "ijecbe@DTE2023";
 const char *MQTT_BROKER = "ab25c1e854d343e386319e43604e5926.s1.eu.hivemq.cloud";
 const char *MQTT_TOPIC = "Camera";
-const char *MQTT_CLIENT_ID = "ESPCAM";
+const char *MQTT_CLIENT_ID = "ESPCAM1";
 const char *MQTT_USER = "despro-IOT";
 const char *MQTT_PASSWORD = "P@ssw0rd";
 
@@ -110,7 +110,7 @@ void setup() {
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_SVGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
+  config.frame_size = FRAMESIZE_VGA; // FRAMESIZE_ + QVGA|CIF|VGA|SVGA|XGA|SXGA|UXGA
   config.jpeg_quality = 10;
   config.fb_count = 2;
   config.grab_mode = CAMERA_GRAB_LATEST;
@@ -147,7 +147,7 @@ void reconnect() {
     String clientId = "ESP32Client";
     if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
       Serial.println("connected");
-      client.setBufferSize(60 * 1024);
+      client.setBufferSize(BUFFER_SIZE * 1024);
       client.subscribe(MQTT_TOPIC);
     } else {
       Serial.print("failed, rc=");
@@ -161,7 +161,7 @@ void reconnect() {
 // Fungsi untuk mengambil Gambar
 void takePicture() {
   // Take Picture with Camera
-  //digitalWrite(4, HIGH);
+  digitalWrite(4, HIGH);
   //fb = esp_camera_fb_get();  
   delay(2000);//This is key to avoid an issue with the image being very dark and green. If needed adjust total delay time.
   fb = esp_camera_fb_get();
@@ -218,10 +218,10 @@ void publishFunction(String payload) {
     Serial.print("Publishing payload...");
     client.publish(MQTT_TOPIC, payload.c_str());
     // Membagi payload ke menjadi beberapa segment
-    const int chunkSize = 60 * 1024;
+    const int chunkSize = (BUFFER_SIZE - 1) * 1024;
     int totalChunks = payload.length() / chunkSize;
     Serial.println(payload.length());
-    for (int i = 0; i <= 0; i++) {
+    for (int i = 0; i <= 1; i++) {
       int startIndex = i * chunkSize;
       int endIndex = startIndex + chunkSize;
       if (endIndex > payload.length()) {
@@ -231,16 +231,12 @@ void publishFunction(String payload) {
       String chunk = payload.substring(startIndex, endIndex);
       // Serial.println("Pesan: " + chunk);
       //Dikirimkan dalam bentuk JSON
-      // DynamicJsonDocument jsonDoc(60 * 1024);
-      // jsonDoc["type"] = "capture";
-      // jsonDoc["deviceId"] = MQTT_CLIENT_ID;
-      // jsonDoc["packet_no"] = pictureNumber;
-      // jsonDoc["sck"] = i+1;
-      // jsonDoc["tsck"] = totalChunks+1;
-      // jsonDoc["payload"] = chunk;
-      // String jsonString;
-      // serializeJson(jsonDoc, jsonString);
-      client.publish(MQTT_TOPIC, chunk.c_str());
+      DynamicJsonDocument jsonDoc(BUFFER_SIZE * 1024);
+      jsonDoc["deviceId"] = MQTT_CLIENT_ID;
+      jsonDoc["payload"] = chunk;
+      String jsonString;
+      serializeJson(jsonDoc, jsonString);
+      client.publish(MQTT_TOPIC, jsonString.c_str());
 
       delay(200);
     }
@@ -274,7 +270,7 @@ void setup_camera() {
   
 
   sensor_t *s = esp_camera_sensor_get();
-  s->set_brightness(s, 0);     // -2 to 2
+  s->set_brightness(s, 2);     // -2 to 2
   s->set_contrast(s, 0);       // -2 to 2
   s->set_saturation(s, 0);     // -2 to 2
   s->set_special_effect(s, 0); // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
