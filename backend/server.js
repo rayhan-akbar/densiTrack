@@ -61,26 +61,29 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Service logic
 
+// Service logic
+
 async function getObject() {
-    const query = `SELECT detected_objects FROM bus ORDER BY ctid DESC LIMIT 1`;  // Use CTID to get the last row in the table
+    const query = `SELECT front, back FROM bus ORDER BY ctid DESC LIMIT 1`;  // Fetch front and back from the last row
     const result = await db.query(query);
     
     if (result.rowCount === 1) {
         return {
-            message: "Last detected object found",
-            detected_object: result.rows[0].detected_objects,  // Return the last detected_object
+            message: "Last front and back values found",
+            front: result.rows[0].front,  // Return the front column
+            back: result.rows[0].back     // Return the back column
         };
     } else {
         return {
-            message: "No detected objects found",
+            message: "No data found",
         };
     }
 }
 
-// Route setup for GET request to fetch the last detected_object
+// Route setup for GET request to fetch the last front and back values
 app.get("/tr/getobject", async (req, res) => {
     try {
-        const result = await getObject();  // Call the new function
+        const result = await getObject();  // Call the updated function
         res.json(result);  // Respond with the result
     } catch (err) {
         res.status(500).json(err);  // Handle errors gracefully

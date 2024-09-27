@@ -19,9 +19,9 @@ def save_base64_image(base64_string, output_file):
     except Exception as e:
         print(f"Failed to decode base64 data: {e}")
 
-# Function to insert the detected object count into NeonDB
 def insert_data_to_neondb(num_objects, image_filename, device_id):
     try:
+        # Connect to the database
         conn = psycopg2.connect(
             host='ep-broad-pine-502933.ap-southeast-1.aws.neon.tech',
             database='Densi',
@@ -29,18 +29,50 @@ def insert_data_to_neondb(num_objects, image_filename, device_id):
             password='uZtHEC7e3yIo'
         )
         cur = conn.cursor()
-        insert_query = """
-        INSERT INTO bus (detected_objects, image, timestamp, device_id) 
-        VALUES (%s, %s, %s, %s)
-        """
-        data = (num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), device_id)
-        cur.execute(insert_query, data)
+
+        # Step 1: Check if there is already a row for ESPCAM2
+        check_query = "SELECT front, back FROM bus WHERE device_id = 'ESPCAM2';"
+        cur.execute(check_query)
+        result = cur.fetchone()
+
+        if result:
+            # Step 2: If the row exists, update the 'front' or 'back' columns
+            if device_id == "ESPCAM2":
+                update_query = """
+                UPDATE bus
+                SET front = %s, image = %s, timestamp = %s
+                WHERE device_id = %s
+                """
+                data = (num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), "ESPCAM2")
+                cur.execute(update_query, data)
+            elif device_id == "ESPCAM1":
+                update_query = """
+                UPDATE bus
+                SET back = %s, image = %s, timestamp = %s
+                WHERE device_id = %s
+                """
+                data = (num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), "ESPCAM2")
+                cur.execute(update_query, data)
+        else:
+            # Step 3: If no row exists for ESPCAM2, insert a new one for ESPCAM2 (only 'front' gets filled initially)
+            if device_id == "ESPCAM2":
+                insert_query = """
+                INSERT INTO bus (device_id, front, image, timestamp) 
+                VALUES (%s, %s, %s, %s)
+                """
+                data = (device_id, num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+                cur.execute(insert_query, data)
+
+        # Commit changes to the database
         conn.commit()
+
+        # Close the cursor and connection
         cur.close()
         conn.close()
-        print("Data successfully inserted into NeonDB.")
+        print("Data successfully inserted/updated in NeonDB.")
     except Exception as e:
         print(f"An error occurred while inserting into NeonDB: {e}")
+
 
 # Function to process and decode the accumulated base64 data
 def process_buffered_data(device_id):
