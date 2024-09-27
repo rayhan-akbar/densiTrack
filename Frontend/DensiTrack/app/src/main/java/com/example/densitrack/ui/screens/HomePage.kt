@@ -60,7 +60,7 @@ fun HomePage(navController: NavHostController) {
 
     // State for selected items
     var selectedBusStop by remember { mutableStateOf("Stasiun UI") }
-    var selectedDirection by remember { mutableStateOf("Biru") }
+    var selectedDirection by remember { mutableStateOf("Blue") }
 
     Box(
         contentAlignment = Alignment.TopCenter,
@@ -101,7 +101,7 @@ fun HomePage(navController: NavHostController) {
                             Spacer(modifier = Modifier.height(8.dp))
                             BusStopMenu(selectedBusStop) { selectedBusStop = it }
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(text = "Direction", fontSize = 18.sp, modifier = Modifier)
+                            Text(text = "Line", fontSize = 18.sp, modifier = Modifier)
                             Spacer(modifier = Modifier.height(8.dp))
                             DirectionMenu(selectedDirection) { selectedDirection = it }
                         }
@@ -218,7 +218,7 @@ fun BusStopMenu(selectedBusStop: String, onBusStopSelected: (String) -> Unit) {
 @Composable
 fun DirectionMenu(selectedDirection: String, onDirectionSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val items = listOf("Biru", "Merah")
+    val items = listOf("Blue", "Red")
 
     ExposedDropdownMenuBox(
         expanded = expanded,

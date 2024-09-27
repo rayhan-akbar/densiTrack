@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -53,25 +54,26 @@ import com.google.accompanist.swiperefresh.SwipeRefresh
 import com.google.accompanist.swiperefresh.SwipeRefreshState
 import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
-
-
+const val TOTAL_CAPACITY = 25
 @Composable
 fun DetailsPage(navController: NavHostController, busStop: String, direction: String) {
-    val directionColor = if (direction.lowercase() == "biru") Color(0xFF189AB4) else Color(0xFFC10F0F)
+    val directionColor = if (direction.lowercase() == "blue") Color(0xFF189AB4) else Color(0xFFC10F0F)
     val truncatedBusStop = truncateDetailsText(busStop, 15)
 
     // Hardcoded values for busNumber and ETA
-    val busNumber = "1234"  // Hardcoded bus number
-    val eta = "ETA: Unknown"  // Hardcoded ETA
+    val busNumber = "08"  // Hardcoded bus number
+    val eta = "Unk"  // Hardcoded ETA
 
     // State for bus capacity (will be fetched from the backend)
-    var busCapacity by remember { mutableStateOf("...") }
+    var frontCapacity by remember { mutableStateOf("...") }
+    var backCapacity by remember { mutableStateOf("...") }
     var isRefreshing by remember { mutableStateOf(false) }
 
     // Trigger API call to get bus capacity
     LaunchedEffect(Unit) {
-        fetchBusCapacity { capacity ->
-            busCapacity = capacity
+        fetchBusCapacity { front, back ->
+            frontCapacity = calculatePercentage(front)  // Calculate front percentage
+            backCapacity = calculatePercentage(back)    // Calculate back percentage
         }
     }
 
@@ -90,8 +92,9 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
             onRefresh = {
                 isRefreshing = true
                 // Trigger a new API call to refresh the data
-                fetchBusCapacity { capacity ->
-                    busCapacity = capacity
+                fetchBusCapacity { front, back ->
+                    frontCapacity = calculatePercentage(front)  // Recalculate front percentage
+                    backCapacity = calculatePercentage(back)    // Recalculate back percentage
                     isRefreshing = false
                 }
             }
@@ -118,7 +121,7 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(text = "Bus Heading to")
+                            Text(text = "Bus Heading to", fontSize = 16.sp)
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF000000)),
                                 modifier = Modifier.width(160.dp)
@@ -142,7 +145,7 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(text = "Direction")
+                            Text(text = "Line", fontSize = 16.sp)
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = directionColor),
                                 modifier = Modifier.width(160.dp)
@@ -174,7 +177,7 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
                         .wrapContentHeight()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        BusInfoRow(busNumber = busNumber, eta = eta, capacity = busCapacity)
+                        BusInfoRow(busNumber = busNumber, eta = eta, frontCapacity = frontCapacity, backCapacity = backCapacity)
                     }
                 }
             }
@@ -183,58 +186,84 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
 }
 
 @Composable
-fun BusInfoRow(busNumber: String, eta: String, capacity: String) {
+fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapacity: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_bus_blue),
-            contentDescription = "Blue Bus Icon",
-            modifier = Modifier
-                .scale(3f)
-                .padding(start = 20.dp, top = 8.dp, bottom = 8.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.Start
+        Row(
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF05445E))
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.padding(2.dp).padding(horizontal = 8.dp)
-                ) {
-                    Text(text = "B", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = busNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "UI", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                }
+                Text(
+                    text = busNumber,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = Color.White,
+                    modifier = Modifier.padding(16.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = eta, fontSize = 12.sp)
-        }
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF000000)),
-            modifier = Modifier.padding()
-        ) {
+            Spacer(modifier = Modifier.width(8.dp))
             Column(
                 verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(6.dp)
+                horizontalAlignment = Alignment.Start
             ) {
-                Text(text = "Capacity", fontSize = 10.sp, color = Color.White)
-                Text(text = capacity, fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White)
+                Text(text = "Bus $busNumber", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.Black)
+                Text(text = "ETA: $eta", fontSize = 16.sp, color = Color.Black)
+            }
+        }
+
+
+        // Display front and back capacities
+        Row {
+            // Back capacity display
+            Box(
+                modifier = Modifier.size(80.dp)  // Adjust size as needed for both boxes
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_back),
+                    contentDescription = "Back Bus Icon",
+                    modifier = Modifier
+                        .size(80.dp)  // Adjust size for icons
+                        .align(Alignment.Center)
+                )
+                Text(
+                    text = backCapacity,  // Back capacity percentage
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,  // Adjust font size as needed
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Front capacity display
+            Box(
+                modifier = Modifier.size(80.dp)  // Adjust size as needed for both boxes
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_front),
+                    contentDescription = "Front Bus Icon",
+                    modifier = Modifier
+                        .size(80.dp)  // Adjust size for icons
+                        .align(Alignment.Center)
+                )
+                Text(
+                    text = frontCapacity,  // Front capacity percentage
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,  // Adjust font size as needed
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center)
+                )
             }
         }
     }
 }
+
 
 fun truncateDetailsText(text: String, maxLength: Int): String {
     return if (text.length > maxLength) {
@@ -245,17 +274,17 @@ fun truncateDetailsText(text: String, maxLength: Int): String {
 }
 
 // Function to fetch bus capacity (detected_object) from the backend
-fun fetchBusCapacity(onResult: (String) -> Unit) {
+fun fetchBusCapacity(onResult: (String, String) -> Unit) {
     val client = OkHttpClient()
     val request = Request.Builder()
-        .url("http://192.168.80.238:3000/tr/getobject")  // Use 10.0.2.2 for emulator
+        .url("http://10.0.2.2:3000/tr/getobject")  // Use 10.0.2.2 for the emulator
         .build()
 
     // Make the network call asynchronously
     client.newCall(request).enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
             e.printStackTrace()
-            onResult("Error: ${e.message}")  // Provide more details about the error
+            onResult("Error", "Error")  // Pass error values to both front and back
         }
 
         override fun onResponse(call: Call, response: Response) {
@@ -264,35 +293,37 @@ fun fetchBusCapacity(onResult: (String) -> Unit) {
 
                 try {
                     val json = JSONObject(body)
-                    if (json.getString("message") == "Last detected object found") {
-                        val detectedObjectString = json.getString("detected_object")
-                        val detectedObject = detectedObjectString.toIntOrNull()  // Convert to int
-
-                        if (detectedObject != null) {
-                            val capacityPercentage = (detectedObject.toFloat() / 50) * 100
-                            val formattedCapacity = String.format("%.0f%%", capacityPercentage)  // Format as percentage
-                            onResult(formattedCapacity)
-                        } else {
-                            onResult("Error: Invalid capacity data")
-                        }
+                    if (json.getString("message") == "Last front and back values found") {
+                        val front = json.getString("front")
+                        val back = json.getString("back")
+                        onResult(front, back)  // Correctly pass both front and back values
                     } else {
-                        val errorMessage = json.optString("error_message", "Unknown error")
-                        onResult("Error: $errorMessage")
+                        onResult("Error", "Error")
                     }
                 } catch (e: Exception) {
                     Log.e("API Response", "Error parsing JSON", e)
-                    onResult("Error: Failed to parse response")
+                    onResult("Error", "Error")  // Handle JSON parsing error
                 }
             } ?: run {
-                onResult("Error: Empty response")
+                onResult("Error", "Error")  // Handle empty response case
             }
         }
-
     })
+}
+
+// Function to calculate the percentage
+fun calculatePercentage(value: String): String {
+    return try {
+        val intValue = value.toInt()
+        val percentage = (intValue.toFloat() / TOTAL_CAPACITY) * 100
+        "${percentage.toInt()}%"  // Convert to integer percentage and append "%"
+    } catch (e: Exception) {
+        "Error"  // Return "Error" if value is not a valid integer
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun DetailsPagePreview() {
-    DetailsPage(navController = rememberNavController(), busStop = "Bus Stop", direction = "Biru")
+    DetailsPage(navController = rememberNavController(), busStop = "Bus Stop", direction = "Blue")
 }
