@@ -1,9 +1,13 @@
 import base64
 import os
 import time
+import json
 import psycopg2
 import paho.mqtt.client as mqtt
 from ultralytics import YOLO
+
+# Global buffer to store chunks of base64 data
+data_buffer = {}
 
 # Function to decode base64 data and save it as an image file
 def save_base64_image(base64_string, output_file):
@@ -16,7 +20,7 @@ def save_base64_image(base64_string, output_file):
         print(f"Failed to decode base64 data: {e}")
 
 # Function to insert the detected object count into NeonDB
-def insert_data_to_neondb(num_objects, image_filename):
+def insert_data_to_neondb(num_objects, image_filename, device_id):
     try:
         conn = psycopg2.connect(
             host='ep-broad-pine-502933.ap-southeast-1.aws.neon.tech',
@@ -26,10 +30,10 @@ def insert_data_to_neondb(num_objects, image_filename):
         )
         cur = conn.cursor()
         insert_query = """
-        INSERT INTO bus (detected_objects, image, timestamp) 
-        VALUES (%s, %s, %s)
+        INSERT INTO bus (detected_objects, image, timestamp, device_id) 
+        VALUES (%s, %s, %s, %s)
         """
-        data = (num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        data = (num_objects, image_filename, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), device_id)
         cur.execute(insert_query, data)
         conn.commit()
         cur.close()
@@ -38,14 +42,20 @@ def insert_data_to_neondb(num_objects, image_filename):
     except Exception as e:
         print(f"An error occurred while inserting into NeonDB: {e}")
 
-# MQTT callback when a message is received
-def on_message(client, userdata, message):
-    print(f"Received message on topic {message.topic}")
+# Function to process and decode the accumulated base64 data
+def process_buffered_data(device_id):
+    global data_buffer
     
-    try:
-        base64_image_data = message.payload.decode('latin1')  # Decode to handle binary data correctly
-        image_filename = "received_image.jpg"
-        save_base64_image(base64_image_data, image_filename)
+    if device_id in data_buffer and len(data_buffer[device_id]) >= 2:
+        # Combine the two chunks into one base64 string
+        combined_data = ''.join(data_buffer[device_id])
+        
+        # Clear buffer after combining
+        data_buffer[device_id] = []
+
+        # Save and process the combined image
+        image_filename = f"received_image_combined_{device_id}.jpg"
+        save_base64_image(combined_data, image_filename)
 
         # Check if the file exists before processing with YOLO
         if not os.path.exists(image_filename):
@@ -65,8 +75,38 @@ def on_message(client, userdata, message):
         print(f"Execution time: {running_time:.2f} seconds")
 
         # Insert detection result into NeonDB
-        insert_data_to_neondb(num_objects, image_filename)
+        insert_data_to_neondb(num_objects, image_filename, device_id)
 
+# MQTT callback when a message is received
+def on_message(client, userdata, message):
+    print(f"Received message on topic {message.topic}")
+    
+    try:
+        # Decode payload from MQTT message
+        payload_str = message.payload.decode('utf-8')
+        payload = json.loads(payload_str)  # Parse JSON payload
+        
+        # Extract fields from JSON
+        device_id = payload.get('deviceId', 'unknown_device')
+        base64_image_data = payload.get('payload', '')
+
+        if not base64_image_data:
+            print("No base64 image data found in the payload.")
+            return
+
+        # Add the incoming base64 data to the buffer for the specific deviceId
+        if device_id not in data_buffer:
+            data_buffer[device_id] = []
+
+        print(device_id)
+        
+        data_buffer[device_id].append(base64_image_data)
+
+        # Process the data if two chunks have been received
+        process_buffered_data(device_id)
+
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
     except Exception as e:
         print(f"Error processing message: {e}")
 

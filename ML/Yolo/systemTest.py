@@ -5,6 +5,9 @@ import psycopg2
 import paho.mqtt.client as mqtt
 from ultralytics import YOLO
 
+# Global buffer to store chunks of base64 data
+data_buffer = []
+
 # Function to decode base64 data and save it as an image file
 def save_base64_image(base64_string, output_file):
     try:
@@ -38,14 +41,19 @@ def insert_data_to_neondb(num_objects, image_filename):
     except Exception as e:
         print(f"An error occurred while inserting into NeonDB: {e}")
 
-# MQTT callback when a message is received
-def on_message(client, userdata, message):
-    print(f"Received message on topic {message.topic}")
-    
-    try:
-        base64_image_data = message.payload.decode('latin1')  # Decode to handle binary data correctly
-        image_filename = "received_image.jpg"
-        save_base64_image(base64_image_data, image_filename)
+# Function to process and decode the accumulated base64 data
+def process_buffered_data():
+    global data_buffer
+    if len(data_buffer) >= 2:
+        # Combine the two chunks into one base64 string
+        combined_data = ''.join(data_buffer)
+        
+        # Clear buffer after combining
+        data_buffer = []
+
+        # Save and process the combined image
+        image_filename = "received_image_combined.jpg"
+        save_base64_image(combined_data, image_filename)
 
         # Check if the file exists before processing with YOLO
         if not os.path.exists(image_filename):
@@ -66,6 +74,19 @@ def on_message(client, userdata, message):
 
         # Insert detection result into NeonDB
         insert_data_to_neondb(num_objects, image_filename)
+
+# MQTT callback when a message is received
+def on_message(client, userdata, message):
+    print(f"Received message on topic {message.topic}")
+    
+    try:
+        base64_image_data = message.payload.decode('latin1')  # Decode to handle binary data correctly
+        
+        # Add the incoming data to the buffer
+        data_buffer.append(base64_image_data)
+
+        # Process the data if two chunks have been received
+        process_buffered_data()
 
     except Exception as e:
         print(f"Error processing message: {e}")
