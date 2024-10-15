@@ -1,8 +1,6 @@
 package com.example.densitrack.ui.screens
 
-import android.app.VoiceInteractor
 import android.util.Log
-import android.view.WindowInsetsAnimation
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,29 +29,47 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.densitrack.R
-import com.example.densitrack.ui.theme.DensiTrackTheme
+import com.google.accompanist.swiperefresh.SwipeRefresh
+import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Callback
-import okhttp3.Call
 import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
-import com.google.accompanist.swiperefresh.SwipeRefresh
-import com.google.accompanist.swiperefresh.SwipeRefreshState
-import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
 
 const val TOTAL_CAPACITY = 25
+
+class CapacityShape(private val capacityPercentage: Float) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,  // Using correct size from Compose UI geometry
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: Density
+    ): Outline {
+        // Calculate the height based on the capacity percentage
+        val height = size.height * (capacityPercentage / 100f)
+
+        // Create the outline using Rect based on the calculated height
+        return Outline.Rectangle(Rect(0f, size.height - height, size.width, size.height))
+    }
+}
+
 @Composable
 fun DetailsPage(navController: NavHostController, busStop: String, direction: String) {
     val directionColor = if (direction.lowercase() == "blue") Color(0xFF189AB4) else Color(0xFFC10F0F)
@@ -187,6 +202,9 @@ fun DetailsPage(navController: NavHostController, busStop: String, direction: St
 
 @Composable
 fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapacity: String) {
+    val frontCapacityFloat = frontCapacity.trimEnd('%').toFloatOrNull() ?: 0f
+    val backCapacityFloat = backCapacity.trimEnd('%').toFloatOrNull() ?: 0f
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -195,6 +213,7 @@ fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapaci
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Bus Number Card
             Card(
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF05445E))
@@ -217,20 +236,33 @@ fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapaci
             }
         }
 
-
         // Display front and back capacities
         Row {
             // Back capacity display
             Box(
                 modifier = Modifier.size(80.dp)  // Adjust size as needed for both boxes
             ) {
+                // Original black image (acts as background)
                 Image(
                     painter = painterResource(id = R.drawable.ic_back),
                     contentDescription = "Back Bus Icon",
                     modifier = Modifier
-                        .size(80.dp)  // Adjust size for icons
-                        .align(Alignment.Center)
+                        .size(80.dp)  // Keep original size
+                        .align(Alignment.Center)  // Align it centrally
                 )
+
+                // Tinted and cropped image (layered on top of the black image)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_back),
+                    contentDescription = "Back Bus Icon",
+                    modifier = Modifier
+                        .size(80.dp)  // Keep the same size
+                        .align(Alignment.Center)  // Align it centrally
+                        .clip(CapacityShape(backCapacityFloat)), // Crop the image based on capacity
+                    colorFilter = ColorFilter.tint(Color(0xFF05445E))  // Tint the image
+                )
+
+                // Capacity text displayed on top
                 Text(
                     text = backCapacity,  // Back capacity percentage
                     fontWeight = FontWeight.Black,
@@ -245,13 +277,27 @@ fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapaci
             Box(
                 modifier = Modifier.size(80.dp)  // Adjust size as needed for both boxes
             ) {
+                // Original black image (acts as background)
                 Image(
                     painter = painterResource(id = R.drawable.ic_front),
                     contentDescription = "Front Bus Icon",
                     modifier = Modifier
-                        .size(80.dp)  // Adjust size for icons
-                        .align(Alignment.Center)
+                        .size(80.dp)  // Keep original size
+                        .align(Alignment.Center)  // Align it centrally
                 )
+
+                // Tinted and cropped image (layered on top of the black image)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_front),
+                    contentDescription = "Front Bus Icon",
+                    colorFilter = ColorFilter.tint(Color(0xFF05445E)),  // Tint the image
+                    modifier = Modifier
+                        .size(80.dp)  // Keep the same size
+                        .align(Alignment.Center)  // Align it centrally
+                        .clip(CapacityShape(frontCapacityFloat))  // Crop the image based on capacity
+                )
+
+                // Capacity text displayed on top
                 Text(
                     text = frontCapacity,  // Front capacity percentage
                     fontWeight = FontWeight.Black,
@@ -263,7 +309,6 @@ fun BusInfoRow(busNumber: String, eta: String, frontCapacity: String, backCapaci
         }
     }
 }
-
 
 fun truncateDetailsText(text: String, maxLength: Int): String {
     return if (text.length > maxLength) {
