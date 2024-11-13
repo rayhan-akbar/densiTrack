@@ -15,7 +15,7 @@ def save_base64_image(base64_string, output_file):
     except Exception as e:
         print(f"Failed to decode base64 data: {e}")
 
-# Function to insert the detected object count into NeonDB
+# Function to insert the detected object count into NeonDB,
 def insert_data_to_neondb(num_objects, image_filename):
     try:
         conn = psycopg2.connect(
