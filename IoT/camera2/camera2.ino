@@ -8,11 +8,15 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include "base64.h"
+#include "time.h"
 #include <WiFiClientSecure.h>
 
 
 // Untuk menyimpan pictureNumber
 //#define EEPROM_SIZE 1
+
+#define uS_TO_S_FACTOR 1000000
+#define TIME_TO_SLEEP  100
 
 // Pin Untuk CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM 32
@@ -33,13 +37,20 @@
 #define PCLK_GPIO_NUM 22
 #define BUTTON_GPIO_NUM 13 // GPIO for the button
 #define BUFFER_SIZE 15
-const char *SSID = "DTE Staff";
-const char *PASSWORD = "ijecbe@DTE2023";
+const char *SSID = "AWMXL";
+const char *PASSWORD = "Awm368041";
 const char *MQTT_BROKER = "ab25c1e854d343e386319e43604e5926.s1.eu.hivemq.cloud";
 const char *MQTT_TOPIC = "Camera";
 const char *MQTT_CLIENT_ID = "ESPCAM1";
 const char *MQTT_USER = "despro-IOT";
 const char *MQTT_PASSWORD = "P@ssw0rd";
+
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 25200;
+const int   daylightOffset_sec = 3600;
+struct tm timeinfo;
+
 
 // HiveMQ Cloud Let's Encrypt CA certificate
 static const char *root_ca PROGMEM = R"EOF(
@@ -83,12 +94,29 @@ PubSubClient client(espClient);
 //int pictureNumber = 0;
 camera_fb_t * fb = NULL;
 
+void print_wakeup_reason(){
+  esp_sleep_wakeup_cause_t wakeup_reason;
+
+  wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch(wakeup_reason)
+  {
+    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
+    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
+    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
+  }
+}
+
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
   Serial.begin(115200);
   setup_wifi();
   Serial.setDebugOutput(true);
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -127,15 +155,34 @@ void setup() {
     return;
   }
   setup_camera();
+  
 }
 
 void loop() {
   setup_camera();
   Serial.println("entering loop");
   Serial.println("Taking picture...");
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    esp_sleep_enable_timer_wakeup(5 * uS_TO_S_FACTOR);
+    esp_deep_sleep_start();
+  }
   takePicture();
-  Serial.println("Sleep for 5 seconds");
-  delay(5000);
+  // Serial.println("Sleep for 5 seconds"
+  if(timeinfo.tm_hour >= 7 && timeinfo.tm_hour <= 9){
+    esp_sleep_enable_timer_wakeup(150 * uS_TO_S_FACTOR);
+    esp_deep_sleep_start();
+  }else if(timeinfo.tm_hour >= 16 && timeinfo.tm_hour <= 18){
+    esp_sleep_enable_timer_wakeup(150 * uS_TO_S_FACTOR);
+    esp_deep_sleep_start();
+  }else if(timeinfo.tm_hour >= 22){
+    esp_sleep_enable_timer_wakeup(32400 * uS_TO_S_FACTOR);
+    esp_deep_sleep_start();
+  }
+  else{
+    esp_sleep_enable_timer_wakeup(100 * uS_TO_S_FACTOR);
+    esp_deep_sleep_start();
+  }
 }
 
 //Connect ke MQTT
@@ -160,18 +207,18 @@ void reconnect() {
 
 // Fungsi untuk mengambil Gambar
 void takePicture() {
-  // Take Picture with Camera
-  digitalWrite(4, HIGH);
+  if(timeinfo.tm_hour >= 18){
+    // Take Picture with Camera
+    digitalWrite(4, HIGH);
+  }
   //fb = esp_camera_fb_get();  
   delay(2000);//This is key to avoid an issue with the image being very dark and green. If needed adjust total delay time.
   fb = esp_camera_fb_get();
-  
   if (!fb) {
     Serial.println("Camera capture failed");
     return;
   }
   digitalWrite(4, LOW);
-
   // initialize EEPROM with predefined size
   //EEPROM.begin(EEPROM_SIZE);
   //pictureNumber = EEPROM.read(0) + 1;
@@ -182,8 +229,6 @@ void takePicture() {
   Serial.println(base64Image);
   //String base64Image = String(output);
   // Serial.println("Debug");
-
-
   // Koneksi ke MQTT
   reconnect();
   //Serial.println("Debug");
@@ -194,17 +239,12 @@ void takePicture() {
   
   //EEPROM.write(0, pictureNumber);
   //EEPROM.commit();
-
   esp_camera_fb_return(fb);
-
   // Delay for a moment to observe the output
   delay(500);
-
   // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
-
   // ESP akan dapat dibangunkan pada saat pin 13 (PIR Sensor) mendeteksi
   //esp_sleep_enable_ext0_wakeup(GPIO_NUM_13, 0);
-
   delay(500);
   Serial.println("Going to Sleep");
   // SLeep
@@ -270,8 +310,8 @@ void setup_camera() {
   
 
   sensor_t *s = esp_camera_sensor_get();
-  s->set_brightness(s, 2);     // -2 to 2
-  s->set_contrast(s, 0);       // -2 to 2
+  s->set_brightness(s, 1);     // -2 to 2
+  s->set_contrast(s, 2);       // -2 to 2
   s->set_saturation(s, 0);     // -2 to 2
   s->set_special_effect(s, 0); // 0 to 6 (0 - No Effect, 1 - Negative, 2 - Grayscale, 3 - Red Tint, 4 - Green Tint, 5 - Blue Tint, 6 - Sepia)
   s->set_whitebal(s, 1);       // 0 = disable , 1 = enable
