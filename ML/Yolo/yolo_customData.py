@@ -5,10 +5,10 @@ from ultralytics import YOLO
 start_time = time.time()
 
 # Load the model
-model = YOLO('yolov9_crowd.pt')
+model = YOLO('yolov9_crowd_latest.pt')
 
 # Predict on the image with the specified parameters                         
-results = model('latihan.jpg', imgsz=640, conf=0.3, save=True)
+results = model('nyoba2.jpg', imgsz=640, conf=0.3, save=True)
 
 # Calculate the number of detected objects
 num_objects = len(results[0].boxes)  # results[0] refers to the first image prediction
